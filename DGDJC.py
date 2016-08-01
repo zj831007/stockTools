@@ -1,25 +1,38 @@
 # -*- coding: utf-8 -*-
-# 抓取机构数据-
+# 抓取大股东减持数据
 # @Author: justin
 # @Date:   2016-07-25 09:31:59
 # @Last Modified by:   Jian Zhang
-# @Last Modified time: 2016-07-29 21:22:49
-# http://data.eastmoney.com/DataCenter_V3/stock2016/JgStatistic/pagesize=50,page=1,sortRule=-1,sortType=,startDate=2016-06-25,endDate=2016-07-25,gpfw=0,js=var%20data_tab_3.html?rt=24490444
-# http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBJGXWZZ/GetLHBJGXWZZ?tkn=eastmoney&code=&mkt=1&dateNum=&startDateTime=2016-06-25&endDateTime=2016-07-25&sortfield=&sortdirec=1&pageNum=1&pageSize=50&cfg=lhbjgxwzz
+# @Last Modified time: 2016-08-01 18:08:22
+# http://data.eastmoney.com/DataCenter_V3/gdzjc.ashx?pagesize=50&page=1&js%EF%BC%9D&param=&sortRule=-1&sortType=BDJZ&tabid=all&code=&name=&rt=48983492
+# 
 
 import urllib2
 import json
 import datetime,time
 import os
 import codecs
+import re
 
 def getLHBdata(startDateTime="2016-07-21",endDateTime="2016-07-22",pageNum=1, pageSize=50):
 	try:
-		url = "http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBJGXWZZ/GetLHBJGXWZZ?tkn=eastmoney&code=&mkt=0&dateNum=&startDateTime=%s&endDateTime=%s&sortfield=&sortdirec=1&pageNum=%s&pageSize=%s&cfg=lhbjgxwzz" % (startDateTime,endDateTime,pageNum, pageSize)
+		url = "http://data.eastmoney.com/DataCenter_V3/gdzjc.ashx?pagesize=%s&page=%s&js＝&param=&sortRule=-1&sortType=BDJZ&tabid=all&code=&name=&rt=48983492" % (pageSize,pageNum)
 
 		print "url: %s" % (url)
 		response = urllib2.urlopen(url, timeout = 1000)
-		return json.load(response)
+		html = response.read()
+		response.close()
+
+		html = unicode(html, "gbk").encode("utf8")
+		htmljson = re.sub(r"(,?)(\w+?)\s*?:", r"\1'\2':", html);
+		
+		htmljson = htmljson.replace("'", "\"");
+		
+		decoded = json.loads(htmljson)
+		
+
+		return decoded
+
 	except urllib2.URLError as e:
 		print e.reason
 
@@ -31,7 +44,7 @@ def getLHBdata(startDateTime="2016-07-21",endDateTime="2016-07-22",pageNum=1, pa
 #		 
 def  appendFile(datestr, datano,content):
 	# datestr = "history"
-	filepath = "data/JG/%s_%s.txt" %(datestr, datano)
+	filepath = "data/DGDJC/%s_%s.txt" %(datestr, datano)
 
 	f=open(filepath,'a')
 	
@@ -42,30 +55,35 @@ def  appendFile(datestr, datano,content):
 
 
 def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
-	
+	# 只取前
+	if pageNum == 3:
+		return
+
 	jsonData = getLHBdata(startDateTime, endDateTime,pageNum, pageSize);  
 
-	if jsonData != None and jsonData['Status'] == 0:
-		tableData = jsonData['Data']
-		tableObj =  tableData[0]
+	print jsonData['pages']
+	if jsonData != None and jsonData['pages'] >0:
+		tableData = jsonData['data']
 		
-		totalPage =  tableObj['TotalPage']
+		
+		totalPage =  jsonData['pages']
 		print "totalPage:%s, pageNum:%s" %(totalPage, pageNum)
 
-		for row in tableObj['Data']:
-			rowList = row.split("|")
-
+		for row in tableData:
+			
+			rowList = row.split(',')
+			
 			scode = rowList[0]
-			
-			JGBMoney = float(rowList[6])/10000
-			JGBCount = int(rowList[7])
-			JGSMoney = float(rowList[8])/10000
-			JGSCount = int(rowList[9])
-			JGPBuy = float(rowList[10])/10000
-
+			gdjcType = rowList[5]
+			gdjcNum = float(rowList[6].encode("utf-8"))
+			gdjcDate = rowList[14]
 			
 
-			
+			tdate = datetime.datetime.strptime(gdjcDate,'%Y-%m-%d').date()
+			tdatestr = datetime.datetime.strftime(tdate,'%Y%m%d')
+
+			if gdjcType.encode("utf-8") == "减持":
+				gdjcNum *= -1
 
 			exchangeType = 1  #交易所类型：0 深圳  1 上证
 			# 1、深圳创业板股票的代码是：300XXX 的股票
@@ -77,14 +95,11 @@ def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
 				exchangeType = 0
 			
 
-			lhbb = "JGBuy Count: "+str(JGBCount)+", JGBuy Money: "+str(JGBMoney)+", JGSell Count: "+str(JGSCount)+", JGSell Money: "+str(JGSMoney)
-			
-			content = str(exchangeType)+"|"+ str(scode) +"|"+ lhbb + "|" + str(JGPBuy)
-			
-
+			jgdy = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,gdjcNum)
+		
 			currdate = datetime.datetime.now().strftime("%Y%m%d")
 
-			appendFile(currdate, "3", content)
+			appendFile(currdate, "96", jgdy)
 			
 
 		# iterator 
@@ -93,8 +108,6 @@ def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
 			generateDataFile(startDateTime, endDateTime,pageNum, pageSize)
 
 def main():
-	print "已经过期！不再使用"
-	return
 	
 	daybefore = 180 # 几天前
 	currdate = datetime.datetime.now().strftime("%Y-%m-%d")

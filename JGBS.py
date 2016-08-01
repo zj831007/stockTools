@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
-# 抓去龙虎榜数据
+# 机构每日买卖数据
 # @Author: justin
 # @Date:   2016-07-25 09:31:59
-# @Last Modified by:   justin
-# @Last Modified time: 2016-07-25 18:36:50
-# http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBGGDRTJ/GetLHBGGDRTJ?tkn=eastmoney&mkt=0&dateNum=&startDateTime=2016-06-13&endDateTime=2016-07-22&sortRule=1&sortColumn=&pageNum=1&pageSize=1&cfg=lhbggdrtj
+# @Last Modified by:   Jian Zhang
+# @Last Modified time: 2016-07-30 17:02:12
+# http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBJGTJ/GetHBJGTJ?tkn=eastmoney&code=&mkt=0&dateNum=&startDateTime=2016-07-29&endDateTime=2016-07-29&sortfield=PBuy&sortdirec=1&pageNum=1&pageSize=50&cfg=lhbjgtj
 
 import urllib2
 import json
 import datetime,time
 import os
 import re
+import sys
 
 def getLHBdata(startDateTime="2016-07-21",endDateTime="2016-07-22",pageNum=1, pageSize=50):
 	try:
-		url = "http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBGGDRTJ/GetLHBGGDRTJ?tkn=eastmoney&mkt=0&dateNum=&startDateTime=%s&endDateTime=%s&sortRule=1&sortColumn=&pageNum=%s&pageSize=%d&cfg=lhbggdrtj" % (startDateTime,endDateTime,pageNum, pageSize)
+		url = "http://datainterface3.eastmoney.com//EM_DataCenter_V3/api/LHBJGTJ/GetHBJGTJ?tkn=eastmoney&code=&mkt=0&dateNum=&startDateTime=%s&endDateTime=%s&sortfield=PBuy&sortdirec=1&pageNum=%s&pageSize=%s&cfg=lhbjgtj" % (startDateTime,endDateTime,pageNum, pageSize)
 		print "url: %s" % (url)
 		response = urllib2.urlopen(url, timeout = 1000)
 		return json.load(response)
@@ -29,7 +30,7 @@ def getLHBdata(startDateTime="2016-07-21",endDateTime="2016-07-22",pageNum=1, pa
 #		 
 def  appendFile(datestr, datano,content):
 	# datestr = "history"
-	filepath = "LHB/%s_%s.txt" %(datestr, datano)
+	filepath = "data/JGBS/%s_%s.txt" %(datestr, datano)
 
 	f=open(filepath,'a')
 	f.write(content)
@@ -51,15 +52,20 @@ def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
 		for row in tableObj['Data']:
 			rowList = row.split("|")
 
-			scode = rowList[0]
-			smoney = rowList[10]
-			bmoney = rowList[11]
-			tdate = datetime.datetime.strptime(rowList[13],'%Y-%m-%d').date()
+			scode = rowList[9]
+			smoney = rowList[16]
+			bmoney = rowList[22]
+			tdate = datetime.datetime.strptime(rowList[15],'%Y-%m-%d').date()
 			tdatestr = datetime.datetime.strftime(tdate,'%Y%m%d')
-			jm = rowList[5]   #净买
-			dp = rowList[43]  #成功率
-			dprate = re.search(r"(\d*)%",dp).group(1);
 			
+			# 去掉连续三个交易日内数据
+			ctypedesc = rowList[29];
+			
+
+			if ctypedesc.find("连续三个交易日")  != -1:
+				# print ctypedesc
+				continue
+
 
 			exchangeType = 1  #交易所类型：0 深圳  1 上证
 			# 1、深圳创业板股票的代码是：300XXX 的股票
@@ -71,13 +77,14 @@ def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
 				exchangeType = 0
 			
 
-			lhbb = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,bmoney)
-			lhbs = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,smoney)
-			lhbdp = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,dprate)
+			jgbb = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,bmoney)
+			jgbs = "%s|%s|%s|%s" %(exchangeType,scode,tdatestr,smoney)
+			
+			
 
-			appendFile(tdatestr, "92", lhbb)
-			appendFile(tdatestr, "93", lhbs)
-			appendFile(tdatestr,"94",lhbdp)
+			appendFile(tdatestr, "97", jgbb)
+			appendFile(tdatestr, "98", jgbs)
+			
 
 		# iterator 
 		if pageNum< totalPage:
@@ -85,12 +92,14 @@ def generateDataFile(startDateTime, endDateTime,pageNum, pageSize):
 			generateDataFile(startDateTime, endDateTime,pageNum, pageSize)
 
 def main():
-	
+	reload(sys) 
+	sys.setdefaultencoding('utf8')
+
 	daybefore = 1 # 几天前
 	currdate = datetime.datetime.now().strftime("%Y-%m-%d")
 
 	startDateTime="2016-01-01"
-	endDateTime="2016-07-24"	
+	endDateTime="2016-07-30"	
 	
 	beforedate = (datetime.datetime.now() - datetime.timedelta(days=daybefore)).strftime("%Y-%m-%d")		
 
